@@ -1,0 +1,58 @@
+name: validate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .coderabbit.yaml
+      - .github/workflows/validate-coderabbit.yml
+  pull_request:
+    paths:
+      - .coderabbit.yaml
+      - .github/workflows/validate-coderabbit.yml
+  # The schema is fetched at run time, so upstream changes can invalidate a
+  # config that passed when it was merged. Catch that on a schedule rather
+  # than on the next unrelated PR.
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+
+      - name: lint yaml syntax
+        run: |
+          set -euo pipefail
+          # relaxed, and deliberately not --strict: the config is heavily
+          # commented and intentionally exceeds 80 columns, so line-length
+          # warnings must not fail the build. Real errors still do — a
+          # duplicated key, which would silently drop a whole section, exits 1
+          # under this invocation.
+          uvx yamllint -d relaxed .coderabbit.yaml
+
+      - name: validate against the CodeRabbit schema
+        run: |
+          set -euo pipefail
+          # The URL declared in the config's first line 301-redirects; fetch
+          # the asset directly so a redirect page never lands in the file.
+          curl -sSfL -o "${RUNNER_TEMP}/schema.v2.json" \
+            https://storage.googleapis.com/coderabbit_public_assets/schema.v2.json
+          # The schema enforces every silent-truncation cap CodeRabbit applies
+          # at review time (tone_instructions, labeling/path/check instructions,
+          # check name, list sizes), so this step is what keeps a too-long
+          # string from being quietly cut in half in production.
+          uvx check-jsonschema --schemafile "${RUNNER_TEMP}/schema.v2.json" .coderabbit.yaml

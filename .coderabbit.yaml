@@ -1,0 +1,1560 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+#
+# CodeRabbit organization config for the `coreruleset` GitHub org.
+#
+# Covers two very different kinds of repository under one config:
+#   - the rule set itself (`coreruleset`, plugins, `coraza-coreruleset`) —
+#     seclang `.conf`, regex-assembly `.ra`, go-ftw regression YAML;
+#   - the tooling around it (`go-ftw`, `crs-toolchain`, `albedo`,
+#     `rassemble-go`, `libinjection-go` in Go; `crs-linter`, `msc_pyparser`
+#     in Python).
+# Path-scoped guidance keeps each kind from being reviewed as the other.
+#
+# Full reference: https://docs.coderabbit.ai/configure-coderabbit/
+#
+# NOTE: List fields (custom_checks, path_filters, etc.) are REPLACED, not
+# merged, when a repo defines the same key locally. A repo that wants to
+# layer its own settings on top of this org config instead of replacing it
+# must set `inheritance: true` in its own .coderabbit.yaml.
+inheritance: true
+
+# Free tier gives PR authors without a paid seat a degraded (but non-zero)
+# automated review instead of none at all. CRS takes drive-by community
+# contributions, so this matters more here than in a closed org.
+enable_free_tier: true
+
+# Language used for all review comments.
+language: "en-US"
+
+# Tone guidance appended to every review prompt. Max 250 chars (silently
+# truncated beyond that).
+tone_instructions: >-
+  Be direct, with respect. Be concise. Assume positive intent. Flag bugs, security issues, false-positive risk and regressions, with a fix. Cite rule IDs, paranoia levels and affected variables. Skip style nits. No praise.
+
+# Opt in to early-access / beta features org-wide.
+early_access: true
+
+reviews:
+  # Generate a semantic PR title on every review. `check-pr-title.yaml` runs
+  # amannn/action-semantic-pull-request in coreruleset, so a title that is not
+  # a conventional-commit type fails CI — the generated title must comply.
+  auto_title_instructions: >-
+    Semantic PR title using a conventional-commit type (feat, fix, chore, docs,
+    test, refactor, ci, perf). `demo:`/`wip:` are not valid types; use `chore:`
+    when nothing else fits. For a rule change, name the rule ID in the subject.
+
+  # "chill" (fewer, higher-signal comments) vs "assertive" (comprehensive).
+  profile: "chill"
+
+  # Use GitHub's "request changes" workflow to hard-block merging.
+  request_changes_workflow: false
+
+  high_level_summary: true
+  review_status: true
+
+  # Fun poem at the end of each review. Keep reviews professional.
+  poem: false
+
+  collapse_walkthrough: true
+  changed_files_summary: true
+  estimate_code_review_effort: true
+
+  # Sequence diagrams add latency and visual noise; not useful for most PRs.
+  sequence_diagrams: false
+
+  # Fortune-cookie messages during review. Keep reviews professional.
+  in_progress_fortune: false
+
+  # Abort in-progress review when the PR closes; avoids wasted compute.
+  abort_on_close: true
+
+  # NOTE: auto-labeling requires each label to already exist in the repo —
+  # CodeRabbit will not create them. Missing labels silently no-op, which is
+  # what makes an org-wide list of coreruleset-specific labels safe here.
+  suggested_labels: true
+  auto_apply_labels: true
+  # Two families of label, both literal names from coreruleset/coreruleset
+  # (emoji shortcode prefix included — copy them verbatim when adding more).
+  #
+  # 1. `release:*` — the changelog taxonomy. `.github/release.yml` groups the
+  #    generated release notes by these, and excludes `release:ignore`
+  #    entirely. They loosely mirror conventional-commit types, so the label
+  #    should agree with the PR title's type. Exactly one per PR (enforced by
+  #    mutually_exclusive_groups below); when nothing else fits, the answer is
+  #    `release:ignore`, not "no label".
+  # 2. Topic labels — what the PR is about, for triage and search.
+  labeling_instructions:
+    # --- release:* (changelog taxonomy, exactly one) ---
+    - label: "release:new-detection"
+      instructions: >
+        Apply when the PR makes CRS detect something it did not detect before:
+        a new `SecRule` in `rules/*.conf`, a new branch in a
+        `regex-assembly/*.ra` pattern, or a new entry in a `*.data` file that
+        widens matching. Corresponds to a `feat:` title. Do NOT apply when the
+        payload was already detected by a sibling rule at any paranoia level —
+        that is `release:fix` or `release:refactor` at best.
+    - label: "release:new-feature"
+      instructions: >
+        Apply when the PR adds a capability rather than a detection: a new
+        `crs-setup.conf.example` option, a new plugin hook, a new
+        `crs-toolchain`/`go-ftw` subcommand or flag, a new CI capability.
+        Corresponds to a `feat:` title on non-rule code.
+    - label: "release:fix"
+      instructions: >
+        Apply when the PR corrects wrong behaviour: a false positive narrowed,
+        a false negative in an existing rule closed, a broken regex, a ReDoS
+        or RE2-compatibility fix, or a bug in the Go/Python tooling.
+        Corresponds to a `fix:` title. This is the label for a rule change
+        that adjusts an existing detection rather than adding a new one.
+    - label: "release:remove-rules"
+      instructions: >
+        Apply when the PR deletes one or more rule IDs from `rules/*.conf` or
+        `plugins/*.conf`. Operators may have exclusions naming those IDs, so
+        removals get their own changelog section.
+    - label: "release:refactor"
+      instructions: >
+        Apply when the PR restructures without changing behaviour: a
+        regex-assembly reorganisation that regenerates byte-identical output,
+        a rule split or merge with equivalent coverage, an internal rewrite in
+        the tooling. Corresponds to a `refactor:` title. If matching behaviour
+        changes at all, it is not a refactor.
+    - label: "release:breaking"
+      instructions: >
+        Apply when the change breaks something a deployment or a downstream
+        tool depends on: a removed or renumbered rule ID that operators may
+        name in an exclusion, a removed or renamed `tag:` that log pipelines
+        filter on, a `crs-setup.conf.example` key removed or renamed, or a
+        removed/renamed exported symbol, CLI flag, or config key in the Go and
+        Python tooling. `.github/release.yml` gives these their own section, so
+        prefer this over `release:important` when callers must change
+        something, not merely be aware of it. Pair it with a "Breaking changes"
+        section in the PR description.
+    - label: "release:important"
+      instructions: >
+        Apply when operators must act or be aware on upgrade: a changed
+        default in `crs-setup.conf.example`, a rule moved between paranoia
+        levels, or a change to the anomaly-scoring mechanism — but nothing
+        an operator must actively fix. If existing configuration stops working
+        (a removed rule ID, tag, or config key), use `release:breaking`
+        instead.
+    - label: "release:ignore"
+      instructions: >
+        The default when nothing above applies. Apply for chores, CI and
+        workflow changes, dependency bumps, documentation, test-only changes,
+        typo fixes, and any small fix with no user-visible effect —
+        corresponds to `chore:`, `ci:`, `docs:`, `test:`, `style:` titles.
+        `.github/release.yml` excludes these from the release notes entirely,
+        so applying it is how a PR is deliberately kept out of the changelog.
+        Never leave a PR with no `release:` label; use this one.
+
+    # --- topic labels (triage; independent of the release: family) ---
+    - label: ":heavy_plus_sign: False Positive"
+      instructions: >
+        Apply when the PR or issue is about a CRS rule matching legitimate
+        traffic — a narrowed pattern, a new exclusion, or a report of benign
+        input being blocked.
+    - label: ":heavy_minus_sign: False Negative - Evasion"
+      instructions: >
+        Apply when the PR or issue is about an attack payload that CRS fails
+        to detect, including encoding/obfuscation bypasses of an existing
+        rule.
+    - label: ":mage: regex-assembly"
+      instructions: >
+        Apply when the PR touches files under `regex-assembly/` (`.ra`
+        sources or `regex-assembly/include/`), or regenerates a rule regex
+        with `crs-toolchain regex update`.
+    - label: ":gem: re2-compat"
+      instructions: >
+        Apply when the change involves regex constructs whose RE2
+        (Coraza/Go and Rust) compatibility is in question — lookarounds,
+        backreferences, atomic groups, possessive quantifiers — or when it
+        fixes an existing incompatibility.
+    - label: ":test_tube: testcase"
+      instructions: >
+        Apply when the PR only adds, renumbers, or corrects go-ftw regression
+        tests under `tests/regression/tests/` without changing rule logic.
+    - label: ":jigsaw: plugin"
+      instructions: >
+        Apply when the PR adds or modifies a CRS plugin (`plugins/*.conf`,
+        `*-rule-exclusions-plugin` repos, or plugin registry entries).
+    - label: ":bomb: sqli"
+      instructions: >
+        Apply when the PR touches the 942xxx rule family, libinjection
+        behaviour, or SQL injection detection patterns.
+    - label: ":book: documentation"
+      instructions: >
+        Apply when the PR only changes Markdown, docs, or comments with no
+        rule, test, or code behaviour change. Pair with `release:ignore`.
+
+  # `.github/release.yml` assigns a PR to the first matching category, so two
+  # release: labels on one PR make the changelog section arbitrary. Keep them
+  # exclusive. `release:important` is in the group too: if a change is both
+  # important and, say, a fix, the changelog wants it under ⭐ once.
+  mutually_exclusive_groups:
+    release:
+      - "release:new-detection"
+      - "release:new-feature"
+      - "release:fix"
+      - "release:remove-rules"
+      - "release:refactor"
+      - "release:breaking"
+      - "release:important"
+      - "release:ignore"
+
+  # Reviewer routing: CODEOWNERS remains the primary, deterministic mechanism.
+  # These are LLM-judgment safety nets and over-fire easily, so they stay off
+  # until the instructions below have been validated against real PRs.
+  suggested_reviewers: false
+  auto_assign_reviewers: false
+  suggested_reviewers_instructions:
+    - reviewers:
+        - handle: "coreruleset/core-developers"
+          type: group
+      instructions: >
+        Assign for any change under `rules/`, `regex-assembly/`,
+        `crs-setup.conf.example`, or `plugins/`, and for any change to a
+        release, backport, or CI workflow. Rule semantics and paranoia-level
+        policy are core-developer decisions.
+
+  slop_detection:
+    enabled: true
+    label: "ai-slop"
+
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    # Draft PRs are skipped; authors request review when ready.
+    drafts: false
+    # `lts/v.*` covers the maintained LTS branches (lts/v3.3.x, lts/v4.x.x).
+    # Backport PRs target those directly and must still be reviewed — LTS
+    # branches drift from main, so a backport is rarely a clean replay.
+    base_branches:
+      - main
+      - "lts/v.*"
+    ignore_title_keywords:
+      - "[WIP]"
+      - "DO NOT REVIEW"
+      - "DO NOT MERGE"
+      - "[skip ci]"
+      - "[skip-review]"
+      - "[no-review]"
+      - "chore(release)"
+
+  # NOTE: CodeRabbit does NOT auto-import a repo's .gitignore into
+  # path_filters — patterns must be listed explicitly here (or locally
+  # with inheritance: true).
+  path_filters:
+    # Generated / vendored / build output.
+    - "!**/node_modules/**"
+    - "!**/vendor/**"
+    - "!**/__pycache__/**"
+    - "!**/*.pyc"
+    - "!**/.venv/**"
+    - "!**/build/**"
+    - "!**/dist/**"
+    - "!**/target/**"
+    - "!**/output/**"
+    - "!**/*.generated.*"
+    - "!**/*.pb.go"
+    - "!**/.idea/**"
+    - "!**/*.svg"
+    - "!**/*.png"
+    - "!**/*.jpg"
+    - "!**/*.ico"
+    # CRS-specific. CHANGES.md is generated by git-chglog at release time;
+    # tests/logs/ is ModSecurity audit/error output from a local test run and
+    # can contain raw attack payloads with NUL bytes.
+    - "!**/CHANGELOG.md"
+    - "!**/CHANGES.md"
+    - "!tests/logs/**"
+    - "!**/util/geo-location/**"
+    # Hugo output for the documentation sites.
+    - "!**/public/**"
+    - "!**/resources/_gen/**"
+
+  # AI-generated finishing touches (docstrings, unit tests, code
+  # simplification). Schema default is enabled, meaning CodeRabbit would push
+  # AI-authored suggestions directly into every PR without a human drafting
+  # them first. Disabled org-wide: AI-CONTRIBUTIONS.md requires a human to
+  # disclose and vouch for AI-assisted content, which an auto-pushed commit
+  # cannot satisfy.
+  finishing_touches:
+    docstrings:
+      enabled: false
+    unit_tests:
+      enabled: false
+    simplify:
+      enabled: false
+
+  # Per-file review guidance. These carry the domain knowledge that a generic
+  # reviewer does not have: seclang semantics, regex-assembly syntax, go-ftw
+  # test structure. Anything needing line-level localization lives here;
+  # whole-diff policy lives in pre_merge_checks below. Each instructions
+  # string is capped at 20,000 chars by the schema.
+  path_instructions:
+    - path: "rules/*.conf"
+      # Core CRS detection rules.
+      instructions: |
+        This is ModSecurity/Coraza seclang. Review it as a CRS rule author
+        would. Flag ⚠️ WARNING: <description> — <fix> on the affected line for:
+
+        Rule ID range — the ID must fall in the family's range and be unused:
+        900000-900999 initialization, 901000-901999 IP reputation,
+        905000-905999 common exceptions, 910000-919999 protocol enforcement,
+        920000-929999 protocol attacks, 930000-939999 LFI/RFI/RCE/PHP,
+        941000-941999 XSS, 942000-942999 SQLi, 943000-943999 session fixation,
+        944000-944999 Java. A new rule should take the next unused multiple of
+        10 in its family. Plugin rules must use the plugin's own reserved
+        range, never a core range.
+
+        Missing or wrong metadata — every rule needs `id`, `phase`, `msg`,
+        `logdata`, `tag:'OWASP_CRS'`, a `paranoia-level/N` tag, the relevant
+        attack-type and `capec/NNN` tags, `ver:'OWASP_CRS/4.x.x'` matching the
+        current version, and a `severity`. A `tag:` value that is not in
+        `util/APPROVED_TAGS` fails the crs-linter CI job — say so explicitly
+        and tell the author to add it there in sorted position first.
+
+        Anomaly scoring — a blocking rule must increment
+        `tx.inbound_anomaly_score_pl%{TX.PARANOIA_LEVEL}` (or the outbound
+        equivalent) by the severity-matched score variable, plus its
+        attack-type score (`tx.sql_injection_score`, `tx.xss_score`, …).
+        A hardcoded numeric increment instead of `%{tx.critical_anomaly_score}`
+        is a bug. 949110 / 959100 / 980170 are the scoring/blocking rules —
+        detection rules must not `deny` directly.
+
+        Paranoia level mismatch — the `paranoia-level/N` tag must match both
+        the `SecRule TX:DETECTION_PARANOIA_LEVEL "@lt N"` guard around the
+        rule and the file section it sits in. A pattern with real FP risk
+        placed at PL1 is a policy change, not a bug fix: call it out as
+        needing an explicit maintainer decision.
+
+        Transformation chain — `t:none` must come first. Flag redundant
+        transformations (`t:lowercase` together with an `(?i)` pattern —
+        prefer `t:lowercase`), missing decodes for the evasion class the rule
+        targets (`t:urlDecodeUni`, `t:htmlEntityDecode`, `t:jsDecode`,
+        `t:cssDecode`, `t:cmdLine` for command injection), and transformations
+        that widen FP risk without need (`t:base64Decode`).
+
+        Target list — flag a rule that omits an obviously relevant variable
+        (`ARGS` without `ARGS_NAMES`, a body rule without `REQUEST_BODY`,
+        a cookie-borne attack without `REQUEST_COOKIES`), and flag
+        `REQUEST_URI` where `REQUEST_URI_RAW` is what the evasion needs.
+        Excluding a target with `!ARGS:foo` is a tuning decision that belongs
+        in an exclusion file, not inline in a detection rule.
+
+        Operator choice — a long literal alternation under `@rx` should be
+        `@pm`/`@pmf` instead (parallel matching, far cheaper). Conversely
+        `@pm` for a pattern needing anchors or capture is wrong. `@contains`
+        and `@streq` beat a regex when the match is a fixed string.
+
+        Chain structure — metadata and disruptive actions belong on the first
+        rule of a chain only; subsequent `chain` rules carry transformations
+        and `setvar`. Metadata repeated on a chained rule is an error.
+
+        Phase — request-body inspection in phase 1 cannot see the body;
+        response rules must be phase 3 or 4; anything referencing a variable
+        set later than its own phase is a bug.
+
+        Engine-disabling actions — `ctl:ruleEngine=Off` in a rule file, or a
+        `SecRuleRemoveById` covering a wide range. In CRS v4 these belong in
+        the exclusion files, and `ctl:ruleEngine=Off` is no longer the
+        supported way to skip inspection.
+
+        Hand-edited compiled regex — if the rule has a matching
+        `regex-assembly/<id>.ra` source, the `@rx` pattern must not be edited
+        here directly. `pre-commit.ci` regenerates it and silently reverts the
+        edit. Tell the author to change the `.ra` and run
+        `crs-toolchain regex update <id>`.
+
+    - path: "plugins/*.conf"
+      # CRS plugins: coreruleset/plugins/ and the *-rule-exclusions-plugin repos.
+      instructions: |
+        This is a CRS plugin's seclang. Every invariant that applies to core
+        rules applies here too: metadata completeness, approved tags, a
+        paranoia-level tag matching its `TX:DETECTION_PARANOIA_LEVEL` guard,
+        `t:none` first in the transformation chain, RE2-compatible regex, and
+        anomaly scoring through the score variables rather than a hardcoded
+        number. In addition, flag ⚠️ WARNING: <description> — <fix> for:
+
+        Rule ID outside the plugin's reserved range — ❌ blocker. Plugin rules
+        must use the range registered for that plugin, never a core CRS range
+        (900000-999999). A plugin rule sitting in a core range collides with a
+        future CRS rule in every installation that loads it.
+
+        Wrong file for the phase of execution — `*-before.conf` runs before
+        the CRS rules and is where exclusions and `SecRuleUpdateTargetById`
+        belong; `*-after.conf` runs after and is where rules depending on CRS
+        variables belong; `*-config.conf` holds only the plugin's own
+        `SecAction` defaults. A rule in the wrong file silently runs at the
+        wrong time relative to CRS.
+
+        Missing or non-idempotent plugin guard — the `*-config.conf` must set
+        its `tx.<plugin>-plugin_enabled` default with `setvar` in a way that
+        does not overwrite an operator's own setting, and the rules must
+        honour it.
+
+        Modifying core CRS state — a plugin writing to `tx.anomaly_score`,
+        `tx.paranoia_level`, or another core variable directly rather than
+        through the documented plugin mechanism.
+
+        Exclusions that disable rather than tune — `SecRuleRemoveById` over a
+        wide range, or `ctl:ruleEngine=Off`, where a targeted
+        `SecRuleUpdateTargetById` would do. In CRS v4 `ctl:ruleEngine=Off` is
+        no longer the supported way to skip inspection.
+
+        Missing test coverage — a plugin repo carries its own `tests/`
+        directory; a rule change without a matching go-ftw test there is the
+        same gap as in the core rule set.
+
+    - path: "crs-setup.conf.example"
+      # The shipped default configuration. Not a detection file — reviewing it
+      # is about defaults, not patterns.
+      instructions: |
+        This is the CRS default configuration operators copy to
+        `crs-setup.conf`. A change here changes behaviour for everyone running
+        defaults. Flag ⚠️ WARNING: <description> — <fix> on the affected line
+        for:
+
+        Changed default without justification — anomaly score thresholds
+        (`tx.inbound_anomaly_score_threshold`,
+        `tx.outbound_anomaly_score_threshold`), `tx.blocking_paranoia_level`,
+        `tx.detection_paranoia_level`, `tx.critical/error/warning/notice_anomaly_score`,
+        sampling percentage, `tx.enforce_bodyproc_urlencoded`, allowed methods,
+        allowed content types, request body limits, or `tx.crs_validate_utf8_encoding`.
+        Each of these is a behaviour change for every default deployment and
+        needs the reasoning in the PR description.
+
+        Uncommented directive — the file ships with `SecAction` blocks
+        commented out by design so the defaults compiled into the rules apply.
+        Uncommenting one makes it an enforced setting for everyone.
+
+        Setting added without documentation — a new `setvar` with no comment
+        block above it explaining what it does, its default, and its
+        trade-off. This file is read as documentation by operators.
+
+        Variable name not matching what the rules read — a `setvar` here whose
+        name no rule in `rules/*.conf` consumes is dead configuration; a rule
+        reading a variable never defaulted here fails open.
+
+        Example values that are unsafe to copy verbatim — a permissive
+        allowlist, a wildcard, or a real hostname/IP left in an example.
+
+    - path: "rules/*.conf.example"
+      # REQUEST-900-EXCLUSION-RULES-BEFORE-CRS and
+      # RESPONSE-999-EXCLUSION-RULES-AFTER-CRS templates.
+      instructions: |
+        These are the exclusion-file templates operators copy to `.conf`.
+        They must stay inert as shipped and demonstrate the correct v4
+        patterns. Flag ⚠️ WARNING: <description> — <fix> for:
+
+        An active (uncommented) rule — everything here must be commented-out
+        example, or the shipped file changes behaviour on install.
+
+        Wrong file for the exclusion type — exclusions that must run before
+        the CRS rules (`SecRuleRemoveById`, `SecRuleUpdateTargetById`,
+        setting `tx.*` inputs) belong in REQUEST-900-...-BEFORE-CRS;
+        exclusions depending on CRS results belong in
+        RESPONSE-999-...-AFTER-CRS.
+
+        Deprecated v3 idiom in an example — `ctl:ruleEngine=Off`, or an
+        app-specific exclusion package that became a plugin in v4. Examples
+        are copied verbatim by operators, so a stale idiom propagates.
+
+        Rule ID outside 900000-900999 / 999000-999999 — the example rule IDs
+        must stay in the range reserved for exclusion files.
+
+        An example with no explanatory comment — each one needs to say which
+        false positive it addresses and how to adapt it.
+    - path: "**/*.ra"
+      # regex-assembly sources compiled by crs-toolchain.
+      instructions: |
+        This is a CRS regex-assembly (`.ra`) source compiled by
+        `crs-toolchain regex generate`. Flag ⚠️ WARNING: <description> — <fix>
+        on the affected line for:
+
+        Non-RE2 constructs — negative or positive lookahead `(?!...)`/`(?=...)`,
+        lookbehind `(?<=...)`/`(?<!...)`, backreferences `\1`, atomic groups
+        `(?>...)`, possessive quantifiers `a++`, and conditionals. CRS regexes
+        must compile under RE2 (Coraza/Go and the Rust bindings), not only
+        PCRE2. This is a hard blocker, not a style preference.
+
+        Multi-byte UTF-8 inside a character class — any non-ASCII character
+        placed between `[` and `]`. Engines match byte-by-byte there, so
+        `[´]` becomes the two bytes `\xC2` and `\xB4` individually and
+        false-positives on unrelated non-Latin scripts. Use an alternation of
+        explicit hex byte sequences (`\xC2\xB4`) instead.
+
+        `\s\x0b` written by hand — the toolchain already expands `\s` to
+        `[\s\x0b]` during generation, so writing the vertical tab yourself
+        produces a duplicated class. Just use `\s`.
+
+        `{{name}}` used for a named assembly — interpolation only works for
+        `##!> define` variables. A named assembly created with `##!=< name`
+        must be referenced with `##!=> name` inside an `##!> assemble` block.
+
+        `##!> define` expected to cross an include — defines are scoped to
+        their own file and do not propagate through `##!> include`. If parent
+        and include both need the value, it must be defined in both.
+
+        ReDoS-shaped ambiguity — inside a quantified group, two branches or
+        positions that can match the same input character (a bare `\s` branch
+        next to a comment body `#.*` or `/\*.*\*/` that also consumes
+        whitespace; `\s*X\s*` inside a `*`-group). Lazy quantifiers do not fix
+        this — the branches must be made disjoint so each whitespace run is
+        consumed in exactly one place.
+
+        Optional leading class before an operator alternation — a pattern
+        shaped like `[\s"'-)]*?\b(\w+)\b[\s"'-)]*?(?:=|<=>|like|glob|rlike)`
+        leaves PCRE2 with no required literal or anchor to skip ahead on, so
+        an unanchored `@rx` retries a failing scan at every start position
+        (O(n²)). Confirmed empirically on 942130/942131/942180. Either keep a
+        required literal or drop the optional leading class.
+
+        Unnecessary breadth — a 2-3 character alternation branch, or a branch
+        that matches on high-entropy input (hashes, tokens, base64, UUIDs) is
+        the usual source of false positives. Ask for the FP analysis.
+
+    - path: "**/tests/**/*.yaml"
+      # go-ftw regression tests.
+      instructions: |
+        These are go-ftw regression tests. Flag ⚠️ WARNING: <description> —
+        <fix> on the affected line for:
+
+        Filename / rule_id mismatch — the file must be named `<rule_id>.yaml`
+        and live under the directory for that rule's family
+        (`tests/regression/tests/REQUEST-942-APPLICATION-ATTACK-SQLI/`, etc.),
+        and `rule_id:` must match the filename.
+
+        Non-contiguous or duplicated `test_id` — IDs must be sequential from 1
+        with no gaps. Removing a test in the middle requires renumbering via
+        `crs-toolchain util renumber-tests <rule_id>`, not leaving a hole.
+
+        Missing `desc` — every test needs a description carrying the actual
+        payload or the behaviour being asserted, so a failure is diagnosable
+        from the test name alone.
+
+        Weak assertion — `expect_ids` must name the rule under test. A test
+        that only asserts `status` or `no_log` proves the request was handled,
+        not that this rule matched. Conversely, a negative test must use
+        `no_log`/`expect_ids: []` semantics rather than omitting the output
+        block.
+
+        Payload not encoded as sent — the `uri`/`data` value must be the
+        wire-format bytes. An unencoded payload in `uri` silently tests a
+        different string than intended; percent-encode it and keep the
+        readable form in `desc`.
+
+        Only positive tests — a new or widened pattern should come with at
+        least one benign payload asserting it does NOT match, especially for
+        short patterns or ones that could hit hashes, IDs, or file paths.
+
+    - path: "**/*.go"
+      instructions: |
+        Go code in the CRS tooling repos (go-ftw, crs-toolchain, albedo,
+        rassemble-go, libinjection-go). Flag ⚠️ WARNING: <description> — <fix>
+        on the affected line for:
+
+        Unchecked or swallowed errors — an ignored return value, `_ = err`, or
+        a bare `return err` where wrapping would give the caller context. Use
+        `fmt.Errorf("doing X: %w", err)` and inspect with `errors.Is`/
+        `errors.As`, not string comparison.
+
+        Panic in library code — `panic`, `log.Fatal`, or `os.Exit` outside
+        `main`. These are libraries consumed by other tools; they must return
+        errors.
+
+        Missing context propagation — a function that does I/O, blocks, or can
+        be cancelled without `ctx context.Context` as its first parameter, or
+        a long-running loop that never checks `ctx.Done()`.
+
+        Goroutine without a lifetime — a `go func()` with no cancellation path,
+        no `WaitGroup`, or no way for the caller to know it finished. Also flag
+        a channel closed from the receiving side.
+
+        Data races — shared state mutated from multiple goroutines without a
+        mutex or channel handoff. Tests must run under `-race`; flag a new
+        concurrency path that no test exercises.
+
+        Regex compiled in a hot path — `regexp.MustCompile` inside a function
+        called per-request or per-test rather than at package level.
+
+        Unbounded reads of untrusted input — reading a full HTTP body or file
+        into memory without a size limit, in code that processes attack
+        payloads or test corpora.
+
+        `interface{}`/`any` outside an API boundary, and bare primitive types
+        where a named type would carry meaning (`type RuleID int`).
+
+    - path: "**/*.py"
+      instructions: |
+        Python in the CRS tooling repos (crs-linter, msc_pyparser, the
+        regression test harness, `util/` scripts). Flag ⚠️ WARNING:
+        <description> — <fix> on the affected line for:
+
+        Silently swallowed exceptions — a bare `except:` or `except Exception:`
+        that logs nothing and continues. A linter that swallows a parse error
+        reports a clean run on a broken rule file, which is worse than
+        crashing.
+
+        Wrong exit semantics — a CLI that reports findings but exits 0, or
+        exits non-zero on a clean run. CRS CI treats exit code as the gate;
+        crs-linter is expected to be `exit=0` with zero `::error` lines when
+        clean.
+
+        Argument coupling not enforced — related CLI options that must be
+        passed together (crs-linter's `-T` requiring `-E`) accepted
+        independently and failing later with an unclear message. Validate at
+        parse time with an actionable message.
+
+        Unvalidated file/path input — a path from CLI args or config joined
+        without checking it exists or stays inside the expected root, and
+        `open()` without an explicit `encoding=`. Rule files contain raw
+        attack payloads and non-UTF-8 bytes; decoding must be explicit about
+        what it does with them.
+
+        Regex built by string concatenation from user or file input, and
+        `re` patterns compiled per-call rather than at module level.
+
+        Mutable default arguments, and shared module-level mutable state in
+        code that may run over multiple rule files in one process.
+
+        Missing type hints on a public function, and `subprocess` calls with
+        `shell=True` or an unpinned external binary.
+
+    - path: "**/.github/workflows/**"
+      instructions: |
+        GitHub Actions workflows. Flag ⚠️ WARNING: <description> — <fix> on the
+        affected line for:
+
+        Unpinned action — every `uses:` must reference a full 40-character
+        commit SHA with the version in a trailing comment
+        (`actions/checkout@<sha>  # v4.2.2`). A tag or branch ref is mutable.
+
+        Credential persistence — `actions/checkout` without
+        `persist-credentials: false` where the job does not need to push.
+
+        Injection through `${{ github.event.* }}` — PR title, body, branch
+        name, or comment text interpolated directly into a `run:` block.
+        Pass it through `env:` and reference `"$VAR"` instead.
+
+        Over-broad `permissions` — a workflow without an explicit
+        `permissions:` block, or one granting `write` where `read` suffices.
+
+        `pull_request_target` with a checkout of the PR head — this runs
+        untrusted code with write-scoped secrets.
+
+        Base-branch filter mistake — `pull_request.branches` filters on the
+        PR's *base* branch, not its head. A workflow scoped to
+        `branches: [main]` never runs on a PR stacked on a feature branch.
+        Call this out when a workflow change is being tested from a stacked PR.
+
+  # Whole-PR gates. These evaluate the diff as a unit — cross-file invariants
+  # (a rule changed without its test, a `.conf` regex changed without its
+  # `.ra`) that no per-file instruction can express.
+  #
+  # All checks are mode: warning. Escalate an individual check to mode: error
+  # (paired with request_changes_workflow: true) only after confirming a low
+  # false-positive rate on real CRS PRs. Check names are capped at 50 chars
+  # and instructions at 10,000 chars by the schema.
+  pre_merge_checks:
+    description:
+      mode: warning
+    issue_assessment:
+      mode: warning
+
+    custom_checks:
+      - name: "Regex Assembly Is the Source of Truth"
+        mode: warning
+        instructions: |
+          Trigger condition — only evaluate if the diff modifies an `@rx`
+          pattern inside a `rules/*.conf` file, or adds/modifies a file under
+          `regex-assembly/`. If it touches neither, report the standalone
+          status Passed with "not applicable" as the reason text.
+
+          Compiled regexes in `rules/*.conf` are generated from
+          `regex-assembly/<rule_id>.ra` by `crs-toolchain regex update`. The
+          `update-regex-assembly-files` / `format-regex-assembly-files`
+          pre-commit hooks regenerate them, so a hand-edit to the `.conf` that
+          is not reflected in the `.ra` is silently reverted by pre-commit.ci
+          on the next run — the change appears to be merged but is not.
+
+          Flag ❌ blocker when a rule's `@rx` pattern changed in `rules/*.conf`
+          and a `regex-assembly/` source for that rule ID exists in the
+          repository but is not part of this diff. Fix: edit the `.ra` source
+          and run `crs-toolchain regex update <rule_id>`, then commit both.
+
+          Flag ⚠️ WARNING when a `.ra` file changed but the corresponding
+          `@rx` in `rules/*.conf` did not — the regeneration step was skipped,
+          so the rule in effect does not match its source. Also warn when a
+          file under `regex-assembly/include/` changed without every dependent
+          rule being regenerated: an include feeds multiple rules, and the
+          diff should show each one.
+
+          Acceptable: a rule with no `.ra` source at all (hand-written regex);
+          a `.ra`-only change explicitly described as a refactor with the
+          regenerated output confirmed byte-identical; a `.conf` change that
+          does not touch the `@rx` pattern (metadata, tags, targets, `t:`
+          chain).
+
+      - name: "Rule Change Requires go-ftw Test Coverage"
+        mode: warning
+        instructions: |
+          Trigger condition — only evaluate if the diff adds or modifies a
+          `SecRule` in `rules/*.conf` or `plugins/*.conf`, or changes a
+          pattern under `regex-assembly/`. Otherwise report Passed with "not
+          applicable" as the reason text.
+
+          Every rule change needs a matching change under
+          `tests/regression/tests/<FAMILY>/<rule_id>.yaml`. The go-ftw
+          regression suite is the only gate that proves the rule still matches
+          what it claims to and still ignores what it must.
+
+          Flag ⚠️ WARNING: <description> — <fix> when:
+
+          A new rule ID is added with no test file for it.
+
+          An existing rule's pattern, target list, or `t:` chain changed and
+          its test file is untouched. A widened pattern needs a new positive
+          test covering the newly-matched payload; a narrowed pattern needs a
+          negative test proving the previously-matched benign input no longer
+          fires.
+
+          A test file is deleted or a `test_id` removed without the remaining
+          IDs being renumbered (`crs-toolchain util renumber-tests <rule_id>`).
+
+          A rule is removed without its test file also being removed.
+
+          The PR states a false-positive fix but adds no benign-payload test
+          asserting the rule no longer matches it. The FP that motivated the
+          PR must be encoded as a test, or it will regress.
+
+          Note in the finding that both engines run in CI — `regression
+          (modsec2-apache)` and `regression (modsec3-nginx)` — and that the
+          quantitative false-positive corpus job posts its result as a PR
+          comment. A rule with FP risk should be confirmed against that
+          result, not assumed untested.
+
+          Acceptable: comment-only or metadata-only rule edits (tag, msg, ver)
+          with no behavioural change; a test change that is itself the whole
+          PR; a rule change whose test lives in a plugin's own test directory,
+          named in the PR description.
+
+      - name: "ReDoS Risk & RE2 Compatibility"
+        mode: warning
+        instructions: |
+          Trigger condition — only evaluate if the diff adds or modifies a
+          regular expression in `rules/*.conf` (`@rx`), `regex-assembly/*.ra`,
+          or a `regexp.MustCompile` / Python `re.compile` in tooling code.
+          Otherwise report Passed with "not applicable".
+
+          CRS regexes run on every request and must compile under RE2 as well
+          as PCRE2, because Coraza (Go) and the Rust bindings do not implement
+          PCRE-only constructs.
+
+          Flag ❌ blocker for any RE2-incompatible construct in a CRS pattern:
+          lookahead `(?=...)`/`(?!...)`, lookbehind `(?<=...)`/`(?<!...)`,
+          backreference `\1`, atomic group `(?>...)`, possessive quantifier
+          (`a++`, `a*+`), recursion, or a conditional. Fix: restructure as an
+          alternation, or state explicitly that the rule is PCRE-only and why.
+
+          Flag ⚠️ WARNING: <description> — <fix> for backtracking-shaped
+          ambiguity — the root cause is ambiguity, not greediness. Inside a
+          quantified group, can two branches or positions match the same input
+          character? Classic shapes: a bare `\s` branch beside a comment body
+          (`#.*`, `/\*.*\*/`) that also consumes whitespace; `\s*X\s*` nested
+          in a `*`-group; nested quantifiers over overlapping classes. Lazy
+          quantifiers do NOT fix this; disjoint branches do.
+
+          Flag ⚠️ WARNING for the distinct start-of-match shape: an optional or
+          lazy leading character class immediately before a multi-branch
+          operator alternation, e.g.
+          `[\s"'-)]*?\b(\w+)\b[\s"'-)]*?(?:=|<=>|like|glob|rlike|regexp)`.
+          With no required literal or anchor, PCRE2 cannot skip ahead and an
+          unanchored `@rx` retries a failing scan at every start position —
+          O(n) work × O(n) positions. Confirmed on rules 942130/942131/942180.
+
+          When you flag either shape, ask for empirical confirmation rather
+          than asserting a complexity class: compile the pattern once under
+          `pcre2test` with several subject lines of increasing size in the same
+          invocation and time the whole run. Do not accept per-process `-t`/
+          `-tm` wall-clock numbers — those repeat the match internally for
+          averaging and do not reflect a single match.
+
+          Do NOT apply backtracking analysis to non-`@rx` operators.
+          `@validateByteRange`, `@pm`, `@pmf`, and `@detectSQLi` are linear
+          scans; their cost on large payloads is a different concern.
+
+          Acceptable: a pattern whose ambiguity is removed by making branches
+          disjoint; a `@pm`/`@pmf` replacement for a long literal alternation;
+          a finding that only reproduces under a backtracking engine and is
+          documented as a non-issue for RE2/Coraza.
+
+      - name: "False Positive Risk & Existing Coverage"
+        mode: warning
+        instructions: |
+          Trigger condition — only evaluate if the diff adds a new detection
+          pattern, widens an existing one, or adds a new rule to
+          `rules/*.conf`, `plugins/*.conf`, or `regex-assembly/`. Otherwise
+          report Passed with "not applicable".
+
+          CRS rules overlap heavily. The default assumption for a claimed
+          false negative is that the payload is ALREADY detected by a sibling
+          rule, usually at a higher paranoia level. A pattern that closes no
+          real gap is pure maintenance cost and pure added FP surface.
+
+          Flag ⚠️ WARNING: <description> — <fix> when the PR adds or widens a
+          pattern and its description does not establish:
+
+          Proof the payload is undetected — the payload probed against the
+          full rule set at PL4 (the test container default), with every rule
+          ID that fired mapped to its `paranoia-level` tag. A grep over
+          `rules/*.conf` is not proof: it misses `@detectSQLi`/libinjection and
+          `@pm*` operators, ignores `t:` chains, and reports rules whose target
+          list excludes the tested variable.
+
+          The sibling baseline — the already-detected variant of the payload
+          probed too, so "parity with the sibling" is not mistaken for "new
+          detection". Ask whether the request was parity or a genuine gap.
+
+          The subset argument — if another rule matches the same payload,
+          compare target lists and `t:` chains. When the sibling's pattern is
+          at least as permissive and its targets are a superset, a new branch
+          here can never be the only match and closes nothing.
+
+          Whether PL1 detection for this class already comes from libinjection
+          (942100). A libinjection blind spot is not a CRS regex gap; moving
+          the class into a PL1 regex is a paranoia-level policy change and
+          must be argued as one, not merged as a bug fix.
+
+          Separately, flag ⚠️ WARNING on FP-prone pattern shapes regardless of
+          the description: a branch of 2-3 characters; a pattern that can match
+          high-entropy input (hashes, session IDs, UUIDs, base64, JWTs);
+          one that matches ordinary file paths, URLs, or common programming
+          syntax; a PL1 addition with any of the above.
+
+          Acceptable: the PR description carries the PL4 probe output and the
+          rule-ID-to-paranoia-level mapping; the addition sits at PL2+ with the
+          FP trade-off stated; the change narrows rather than widens.
+
+      - name: "CRS Rule Metadata & ID Conventions"
+        mode: warning
+        instructions: |
+          Trigger condition — only evaluate if the diff adds or modifies a
+          `SecRule` in `rules/*.conf`, `plugins/*.conf`, or
+          `crs-setup.conf.example`. Otherwise report Passed with "not
+          applicable".
+
+          These are the invariants the crs-linter CI job enforces. Catching
+          them in review avoids a round-trip through a failed check.
+
+          Flag ⚠️ WARNING: <description> — <fix> for:
+
+          ID collisions and range violations — an ID already used elsewhere in
+          the rule set, an ID outside its family's range, or a new rule that is
+          not the next unused multiple of 10 within its family. A plugin rule
+          using a core range is a ❌ blocker: it collides with future CRS rules
+          in every installation that loads the plugin.
+
+          Unapproved tags — any `tag:` value not present in
+          `util/APPROVED_TAGS`. crs-linter fails with `rule uses unknown tag`.
+          Fix: add the tag to `util/APPROVED_TAGS` in sorted position in this
+          same PR.
+
+          Missing or stale `ver:` — the version tag must match the current CRS
+          version in the branch being targeted, including on backports to an
+          `lts/v*` branch, where it must carry the LTS version rather than
+          main's.
+
+          Missing paranoia-level tag, or a tag inconsistent with the
+          `TX:DETECTION_PARANOIA_LEVEL` guard and the file section around it.
+
+          Missing `capec/` tag on a new detection rule, missing `logdata`, a
+          `msg` that does not name the attack class, or a `severity` that does
+          not match the anomaly-score variable the rule increments.
+
+          Rule ordering — a new rule inserted out of numeric order within its
+          file.
+
+          Note when reporting: linting a single file in isolation produces
+          false `TX variable not set` errors for `critical_anomaly_score` and
+          `DETECTION_PARANOIA_LEVEL`, because those are defined in the 901
+          initialization rules. The linter must be run over `rules/*.conf` as
+          a whole, with the version pinned to `CRS_LINTER_VERSION` in
+          `.github/workflows/lint.yaml`, and all five of `-r -t -f -T -E`
+          supplied together (`-T` without `-E` aborts with an argparse error
+          before linting anything).
+
+      - name: "Rule & Config Breaking Changes"
+        mode: warning
+        instructions: |
+          Flag ⚠️ WARNING: <description> — <fix> on any change that breaks
+          something a CRS deployment or a downstream tool depends on, without
+          it being documented in the PR description:
+
+          Rule removal or renumbering — deleting a rule ID, or changing an
+          existing rule's ID. Every operator with an exclusion, a
+          `SecRuleRemoveById`, or a tuning entry naming that ID silently loses
+          it. This needs an explicit note and a migration line, not a silent
+          drop.
+
+          Default configuration changes — a changed default in
+          `crs-setup.conf.example` (anomaly thresholds, paranoia level,
+          `tx.*` defaults, sampling percentage, allowed methods, content
+          types, or the request-body limits). These change behaviour for
+          everyone on defaults.
+
+          Tag or message changes — removing or renaming a `tag:` that
+          downstream tooling, dashboards, or SIEM rules filter on; changing
+          `msg` text that log pipelines match against.
+
+          Paranoia level moves — moving a rule between paranoia levels changes
+          which deployments it fires on. Raising it hides detections; lowering
+          it raises FP rates for everyone at that PL.
+
+          Data file changes — removing entries from a `*.data` file that rules
+          reference, or renaming the file.
+
+          Tooling API changes — in the Go and Python repos: removing or
+          renaming an exported symbol, changing a function signature, changing
+          a CLI subcommand or flag, or changing a config-file key. go-ftw's
+          test YAML schema and crs-toolchain's command surface are consumed by
+          CI in other repos.
+
+          Required documentation for any of the above: a "Breaking changes"
+          section in the PR description naming what changed and what operators
+          must update, an entry that will reach CHANGES.md at release time,
+          and — where the change is user-visible — a matching update in
+          coreruleset/documentation, which is what operators actually read.
+          Ask for the docs PR link if it is not in the description.
+
+          Acceptable patterns: a deprecation kept for one release with a note;
+          a rule ID retired and left unused rather than reassigned; a new
+          default introduced alongside the old one with the switch documented.
+
+      - name: "AI Contribution Disclosure"
+        mode: warning
+        instructions: |
+          coreruleset's AI-CONTRIBUTIONS.md policy requires every PR where AI
+          tools materially assisted to disclose it in the PR body.
+
+          Flag ⚠️ WARNING: <description> — <fix> when the PR body has no
+          `## ai disclosure` section but the diff shows signals of AI
+          assistance: generated-looking docstrings or comments at uniform
+          density, a large mechanically-uniform test batch, boilerplate
+          phrasing in the description, or an unusually large diff with no
+          incremental commit history.
+
+          When the section is present, flag it as inadequate if any field is
+          generic. The template requires three fields, each concrete:
+          `**tools used**` (model name and version), `**assisted with**` (what
+          was actually generated — "initial regex pattern for SQLi
+          detection", "test case scaffolding", "regeneration via
+          crs-toolchain"), and `**review performed**` (concrete verification —
+          "ran the full go-ftw suite", "probed the payload at PL4 and mapped
+          firing rule IDs", "checked the pattern for RE2 compatibility").
+          "assisted with rule writing" or "reviewed the code" is not a
+          disclosure; the policy exists to give reviewers grounds to trust the
+          contribution.
+
+          Also flag: a PR body missing the required `## what`, `## why`, and
+          `## refs` sections (all lowercase); and any `Co-Authored-By` or
+          AI-tool signature line in a commit message or PR body — this project
+          does not use attribution trailers.
+
+          Do not flag a trivial PR (a typo fix, a version bump, a
+          Renovate/Dependabot automated update) for a missing disclosure.
+
+      # Generic application-security review for the tooling repos (go-ftw,
+      # crs-toolchain, albedo, crs-linter) and for anything CRS ships that
+      # parses untrusted input. Kept broad on purpose: this org writes the
+      # rules for these classes, so the code implementing them should not
+      # contain them.
+      - name: "OWASP Security (Web, API & LLM)"
+        mode: warning
+        instructions: |
+          Flag ⚠️ WARNING: <description> — <fix> on any affected line or block for:
+
+          ## Web (OWASP Top 10)
+
+          Broken Access Control — missing authorization checks, insecure direct object references,
+          CORS misconfiguration, privilege escalation paths, forced browsing to authenticated resources.
+
+          Cryptographic Failures — hardcoded secrets or API keys, weak algorithms (MD5, SHA1, DES),
+          unencrypted sensitive data in transit or at rest, weak or expired TLS configuration,
+          secrets committed to version control.
+
+          Identification and Authentication Failures — missing MFA on sensitive operations, weak
+          password policies, insecure session management (long-lived tokens, no rotation), improper
+          token validation, JWT algorithm confusion attacks (e.g., RS256 → HS256 downgrade).
+
+          Injection — SQL, NoSQL, LDAP, OS command, or expression language injection; any
+          unsanitized user-controlled input passed to a query, shell, template, or interpreter.
+
+          Insecure Design — missing rate limiting on sensitive endpoints, absent input validation,
+          insecure data flows, no threat model consideration for new features.
+
+          Security Misconfiguration — default or blank credentials, verbose error messages exposing
+          stack traces or internal paths, unnecessary features or services enabled, overly permissive
+          IAM roles or policies (e.g., wildcard * actions or resources).
+
+          Vulnerable and Outdated Components — direct use of libraries or versions with published
+          CVEs, or dependencies that are significantly out of date with known security fixes.
+
+          Software and Data Integrity Failures — unsigned or unverified build artifacts, insecure
+          deserialization of untrusted data, missing integrity checks on externally fetched content.
+
+          Security Logging and Monitoring Failures — missing audit logs for sensitive operations
+          (auth, privilege changes, data access), logging of PII or secrets, no alerting on
+          repeated authentication failures.
+
+          SSRF — user-controlled URLs or hostnames passed to internal HTTP requests without
+          validation or allowlisting; metadata endpoint exposure (e.g., 169.254.169.254).
+
+          ## API (OWASP API Top 10)
+
+          BOLA (Broken Object Level Authorization) — API endpoints that accept object IDs without
+          verifying the caller owns or has access to that object.
+
+          Broken Authentication — missing or weak API key validation, tokens without expiry,
+          credentials exposed in URLs, query params, or logs.
+
+          Broken Object Property Level Authorization — returning or accepting more fields than the
+          caller should access (over-fetching, mass assignment vulnerabilities).
+
+          Unrestricted Resource Consumption — no rate limiting, missing pagination limits, absent
+          payload size caps, or unlimited query depth on API endpoints.
+
+          Broken Function Level Authorization — admin or privileged endpoints accessible to
+          lower-privilege roles; HTTP method abuse (GET performing writes, DELETE without authz).
+
+          Unrestricted Access to Sensitive Business Flows — automated abuse of flows like account
+          creation, checkout, or password reset without bot protection (CAPTCHA, rate limits).
+
+          Improper Inventory Management — deprecated or undocumented API versions still accessible
+          in production; shadow APIs not tracked in the API catalog.
+
+          Unsafe Consumption of APIs — third-party API responses trusted and used without
+          validation, enabling injection or data integrity attacks.
+
+          ## LLM (OWASP LLM Top 10)
+
+          Prompt Injection — user input or external content (documents, web pages, tool outputs)
+          manipulates LLM behavior; untrusted data treated as instructions rather than data.
+
+          Sensitive Information Disclosure — LLM leaks PII, credentials, system prompts, or
+          training data in responses; system prompt contents retrievable via user interaction.
+
+          Supply Chain Vulnerabilities — untrusted models, datasets, or plugins introduced without
+          integrity verification; no pinning of model versions or embedding providers.
+
+          Improper Output Handling — LLM output rendered in UI or passed to downstream systems
+          without sanitization, enabling XSS, code injection, or command injection.
+
+          Excessive Agency — LLM-connected tools or agents granted more permissions than the task
+          requires; irreversible actions taken without human-in-the-loop confirmation.
+
+          System Prompt Leakage — system prompt contents exposed through model responses,
+          error messages, or tool call metadata.
+
+          Vector and Embedding Weaknesses — poisoned embeddings in RAG pipelines; lack of access
+          control on vector store contents allowing cross-tenant data leakage.
+
+          Misinformation — LLM outputs presented as authoritative without grounding, citation,
+          or confidence signals; no hallucination mitigation for factual claims.
+
+          Unbounded Consumption — no limits on token usage, API calls, or compute per request;
+          susceptible to denial-of-wallet attacks through prompt amplification.
+
+      - name: "Unpinned Dependencies & Actions"
+        mode: warning
+        instructions: |
+          Trigger condition, only evaluate ecosystems whose manifest, lockfile, Dockerfile,
+          workflow, or pipeline file actually changed in this diff. If the diff touches none of
+          the file types listed below, report the standalone status Passed, not Inconclusive,
+          and state "not applicable" as the reason text rather than folding it into the status
+          itself.
+
+          Flag ⚠️ WARNING: <description> — <fix> whenever a dependency is not pinned to an exact
+          version or is missing a hash verifier:
+
+          GitHub Actions / .github/workflows/*.yml, any "uses:" referencing a tag, branch, or
+          short SHA. Require a full 40-character commit SHA with the human-readable version in
+          a trailing comment (actions/checkout@<sha>  # v4.2.2). A tag is a mutable ref and a
+          compromised upstream Action runs with access to this workflow's secrets. This applies
+          to first-party "actions/" Actions too. Reusable workflows called with "uses:
+          org/repo/.github/workflows/x.yml@ref" carry the same requirement.
+
+          Go / go.mod, any replace directive pointing to a local path without a version;
+          go.sum must not be deleted or excluded from version control. Flag "GOFLAGS=-mod=mod"
+          in CI, which lets the build mutate go.mod instead of failing on drift.
+
+          Python / requirements.txt, any package using >=, ~=, !=, *, or no version; warn if
+          --hash=sha256: or --hash=sha512: is absent from each entry.
+
+          Python / pyproject.toml, version ranges or no version; warn if uv.lock (or
+          poetry.lock) is absent from the repo, or if the lock file exists but was not updated
+          in a PR that changes dependency versions in pyproject.toml. Recommend hashes enabled
+          (uv, or pip-compile --generate-hashes).
+
+          npm / pnpm / Yarn (documentation sites and tooling), any version using ^, ~, *, >,
+          >=, or "latest"; warn if the matching lockfile is absent or not committed alongside
+          the manifest change. Any new or changed entry under "overrides" (npm),
+          "resolutions" (Yarn), or "pnpm.overrides" needs an inline comment or a PR-description
+          line explaining why a transitive dependency's resolved version is being forced —
+          these silently change what gets installed without appearing as a normal bump.
+
+          Docker, any image using the :latest tag, no tag, or a named tag without a digest.
+          Prefer image@sha256:<digest>. This covers the CRS Docker images, the go-ftw and
+          albedo images, and the ModSecurity/nginx/Apache base images in tests/docker-compose.yml
+          — an unpinned test base image makes a regression failure unreproducible. Also flag OS
+          package installs inside the Dockerfile (apt-get install, apt install, apk add, yum
+          install, dnf install) with no version pinned per package. Treat a backslash-continued
+          RUN command as one logical command, and treat a package argument built from a shell
+          variable or build-arg (e.g. "$PKG_VERSION") as unresolved — flag it as unpinned
+          rather than assuming it is versioned elsewhere.
+
+          Pinned tool versions in CI, a workflow that installs a tool at an unpinned version
+          where the repo already declares the pinned one (crs-linter is pinned via
+          CRS_LINTER_VERSION in .github/workflows/lint.yaml; go-ftw and crs-toolchain versions
+          likewise). A local run at a different version than CI diverges silently.
+
+          Terraform, no pinned version constraint for providers or modules.
+
+          Helm / Chart.yaml, any entry under "dependencies:" using a version range instead of
+          an exact version; warn if Chart.lock is absent for a chart that declares dependencies.
+
+          Git submodules, do NOT flag a ".gitmodules" "branch" setting by itself: plain
+          "git submodule update" always checks out the commit SHA recorded in the
+          superproject's index and never consults "branch", so the setting alone is inert.
+          Only flag it when a workflow, Makefile, or CI script in this repo actually runs
+          "git submodule update --remote", which does track the branch tip instead of the
+          pinned commit.
+
+          Any other dependency manifest or lockfile format not explicitly listed above: accept
+          an exact version, a commit SHA, a content digest/hash, or a local/path source as
+          pinned. Flag a comparison operator, wildcard, range, branch reference, or
+          "latest"-style meta-version as unpinned. Only warn about a missing lockfile when the
+          diff or repository gives actual evidence that ecosystem conventionally uses one.
+
+      - name: "Secrets, Payloads & PII in Logs"
+        mode: warning
+        instructions: |
+          Flag ⚠️ WARNING: <description> — <fix> on any line that emits a log,
+          stack trace, error message, or telemetry record that may include the
+          categories below. Fix by masking, redacting, or allowlisting fields
+          explicitly; never log a full request or response object.
+
+          This org's tooling handles live HTTP traffic and attack corpora, so
+          "the payload" is exactly the thing that must not leak into a shared
+          log, a CI job output, or a PR comment.
+
+          Credentials & tokens — API keys, JWTs, OAuth access/refresh tokens,
+          session cookies, `Authorization` header contents forwarded without
+          redaction, GitHub tokens in a workflow `run:` block or an `echo`.
+
+          Captured request data in rule metadata — a `logdata:` that emits more
+          than `%{MATCHED_VAR}`/`%{TX.0}`, or a rule that logs a whole variable
+          collection. CRS audit logs land in operators' SIEMs; a rule that logs
+          the full request body pushes user data there for every match.
+
+          Full-object logging in tooling — `log.Printf("%v", req)`,
+          `slog.Info("req", "body", body)`, `print(response)`,
+          `json.Marshal` of a whole request/response struct into a log line.
+          Allowlist the fields instead.
+
+          Test fixtures and logs committed to the repo — a `tests/logs/`
+          artifact, a captured audit log, or a corpus file containing real
+          traffic. These carry live IPs, cookies, and credentials. Synthetic
+          payloads only.
+
+          Unsanitized errors & stack traces — logging an exception message or
+          stack trace in a production path without scrubbing query strings,
+          request bodies, or attached field values.
+
+          Base64-encoded blobs — long base64-looking values written to a log
+          or error message. Base64 is encoding, not encryption; decoded
+          payloads commonly contain JWTs, tokens, bodies, or key material.
+          Redact, hash, or log a short fingerprint (first 6 chars + length).
+
+          Contact and device identifiers — full email addresses, phone
+          numbers, IP addresses paired with timestamps, MAC addresses. Hashed
+          or partially masked forms are acceptable where correlation is needed.
+
+          Acceptable patterns: structured logging with an explicit field
+          allowlist; redaction applied at the logger level; correlation IDs not
+          derived from user identifiers; debug-only verbose output behind an
+          explicit flag that is off by default.
+
+      - name: "New Dependency Scrutiny"
+        mode: warning
+        instructions: |
+          Trigger condition, the PR diff adds a new dependency entry (a line
+          or key that did not exist on the base branch) in any of:
+          package.json, requirements.txt, pyproject.toml, Pipfile, Gemfile,
+          go.mod, Cargo.toml, pom.xml, build.gradle, build.gradle.kts,
+          composer.json, Package.swift, Podfile, Chart.yaml, a new
+          "uses:" step referencing a third-party GitHub Action that was not
+          present in .github/workflows/*.yml or *.yaml on the base branch, or
+          a new plugin reference in a Buildkite pipeline YAML that was not
+          present on the base branch. A malicious or compromised Action or
+          Buildkite plugin runs with direct access to CI secrets, so a
+          newly-added one deserves the same scrutiny as a newly-added
+          package — this check is about provenance of the addition, not
+          pinning syntax (already covered by "Unpinned Dependencies &
+          Actions").
+
+          For each newly-added dependency or Action, flag ⚠️ WARNING:
+          <description>, <fix> when the PR description does not explain why
+          it was added. Ask for:
+
+          Justification, a one-line reason the dependency is needed and why
+          an existing dependency already in the repo or org cannot cover it.
+
+          Typosquat check, compare the new package or Action name against
+          popular packages/Actions in the same ecosystem for suspicious
+          similarity (extra or swapped characters, added hyphens/underscores,
+          common misspellings of a well-known package or Action).
+
+          Publisher/age signal, call out packages or Actions that are very
+          recently published, have very few downloads/stars, or have a
+          single maintainer with no other published packages/Actions, so a
+          human can decide whether that is acceptable for this use case.
+
+          Transitive surface, for ecosystems where the manifest pulls in a
+          large transitive tree (e.g. a single npm package adding hundreds of
+          sub-dependencies), note the expanded surface so the reviewer can
+          weigh it.
+
+          Acceptable patterns: PR description already states why the
+          dependency, Action, or plugin was added and links to its source
+          repo or docs; the dependency is a well-known, widely-used package
+          (do not flag established packages like React, lodash, requests,
+          etc. just for being newly added to this repo); the Action is
+          published by "actions/" or another verified/first-party GitHub
+          org, or the plugin is published by the buildkite-plugins GitHub
+          org; the change is a Renovate/Dependabot automated PR bumping an
+          existing dependency or Action (not a new one).
+
+
+      - name: "Install & Build-Time Code Execution"
+        mode: warning
+        instructions: |
+          Flag ⚠️ WARNING: <description>, <fix> for any of the following:
+
+          Pipe-to-shell installers, "curl ... | bash", "curl ... | sh",
+          "wget -O- ... | sh", or equivalent in a Dockerfile, CI workflow step,
+          or shell script. The remote script is fetched and executed with no
+          version pin and no hash check; the far end can serve anything at
+          request time. Prefer a pinned, checksum-verified download followed
+          by a separate execute step. This includes installing go-ftw,
+          crs-toolchain, or any release binary via an install script in CI.
+
+          Go checksum database bypass, "GOSUMDB=off" or "GOFLAGS=-insecure"
+          set in a Dockerfile, CI workflow, or Go env file, or an overly broad
+          "GOPRIVATE"/"GONOSUMDB" glob (e.g. "GOPRIVATE=*"). These disable Go's
+          module tamper-detection for the matched modules; treat as higher
+          severity than a missing version pin. "GOINSECURE" permits fetching
+          over insecure transport but does not by itself disable checksum
+          database validation — call it out separately.
+
+          Python packaging, a setup.py or build backend hook with a custom
+          install/build step that makes network calls, shells out, or downloads
+          and executes a remote file, rather than declaring dependencies
+          declaratively. Also flag "uv pip install" / "pip install" from a
+          non-PyPI URL or a git ref without a pinned commit.
+
+          npm/pnpm/Yarn lifecycle scripts, a new or changed "preinstall",
+          "install", or "postinstall" entry in package.json's "scripts" field.
+          Ask why the script is needed and whether "--ignore-scripts" is safe
+          for this dependency in CI.
+
+          Docker build-time fetches, a RUN step downloading a binary or archive
+          over HTTP, or over HTTPS with no checksum or signature verification,
+          into an image that ends up published under the org.
+
+          Terraform provisioners, a new or changed "provisioner \"local-exec\""
+          or "provisioner \"remote-exec\"" block, especially one whose command
+          fetches and runs a remote script. A "null_resource" wrapping the same
+          provisioner is the same risk, not a mitigation.
+
+          Acceptable patterns: pipe-to-shell replaced with "curl -o
+          installer.sh ... && sha256sum -c installer.sh.sha256 && bash
+          installer.sh"; a release binary installed from a pinned tag with its
+          published checksum verified; "go install tool@<exact version>" with
+          the module checksum database left enabled.
+
+      - name: "Renovate: config present and valid"
+        mode: warning
+        instructions: |
+          Scan every PR that adds, modifies, or deletes files in the repo root
+          or the `.github/` directory.
+
+          Trigger condition — only proceed if any of the following files are
+          touched: `renovate.json`, `renovate.json5`, `.github/renovate.json`,
+          or `.github/renovate.json5`. Also trigger if *none* of those files
+          exist anywhere in the repository at the time of the PR (i.e. the repo
+          has no Renovate config at all).
+
+          Check 1 — File presence:
+            The repository must contain at least one of:
+              - `renovate.json` (repo root)
+              - `renovate.json5` (repo root)
+              - `.github/renovate.json`
+              - `.github/renovate.json5`
+
+            If none exist, emit:
+              ⚠️ WARNING: No Renovate config found. Add a `renovate.json` in
+              the repo root that extends `github>coreruleset/renovate-config`
+              so automated dependency updates are enabled for this repo.
+
+          Check 2 — Schema field:
+            The file must contain a `$schema` key set to exactly:
+              `https://docs.renovatebot.com/renovate-schema.json`
+
+            If missing or incorrect, emit:
+              ⚠️ WARNING: Renovate config is missing or has an incorrect
+              `$schema`. Set it to
+              `https://docs.renovatebot.com/renovate-schema.json`.
+
+          Check 3 — shared preset extension:
+            The `extends` array must include `github>coreruleset/renovate-config`.
+
+            If missing, emit:
+              ⚠️ WARNING: Renovate config does not extend the shared org
+              preset. Add `github>coreruleset/renovate-config` to the
+              `extends` array.
+
+          Acceptable: all three checks pass. A repo-local `packageRules`
+          block on top of the shared preset is fine and should not be flagged.
+
+  tools:
+    # --- Go: the majority of CRS tooling ---
+    golangci-lint:
+      enabled: true
+      # Repos already carrying a .golangci.yml are picked up automatically;
+      # set config_file per-repo only if the file is named non-standardly.
+
+    # --- Python: crs-linter, msc_pyparser, util/ scripts, test harness ---
+    ruff:
+      enabled: true
+    # Redundant with ruff (which covers pyflakes/pycodestyle/pylint rules) and
+    # would double-report on the same lines.
+    flake8:
+      enabled: false
+    pylint:
+      enabled: false
+
+    # --- Config, shell, CI, containers ---
+    yamllint:
+      enabled: true
+    shellcheck:
+      enabled: true
+    actionlint:
+      enabled: true
+    zizmor:
+      enabled: true
+    hadolint:
+      enabled: true
+    checkov:
+      enabled: true
+    markdownlint:
+      enabled: true
+    github-checks:
+      enabled: true
+
+    # --- Security scanning ---
+    trivy:
+      enabled: true
+    osvScanner:
+      enabled: true
+    trufflehog:
+      enabled: true
+    gitleaks:
+      enabled: true
+    # PII leak detection in PR diffs. Kept on because test corpora and
+    # captured traffic are a real source of accidental PII in this org.
+    presidio:
+      enabled: true
+    # OpenGrep: semantic static analysis. The active open-source fork after
+    # Semgrep's 2025 licensing change — ~99% rule parity, roughly 3x faster,
+    # and it runs with a profile-based default config when no repo-level
+    # config file is present (semgrep would be skipped on every repo without
+    # a semgrep.yml, and double-flag on repos that have one).
+    opengrep:
+      enabled: true
+    semgrep:
+      enabled: false
+    # Scans SKILL.md manifests and MCP configs for vulnerabilities/malicious
+    # patterns in AI agent skills. Relevant: several repos ship .claude/skills.
+    skillspector:
+      enabled: true
+
+    # --- Off: no JVM, PHP, Ruby, or Rust code in this org's repos ---
+    fbinfer:
+      enabled: false
+    pmd:
+      enabled: false
+    # No OpenAPI specs to diff.
+    oasdiff:
+      enabled: false
+    # Off by default; the documentation repos can opt in locally.
+    languagetool:
+      enabled: false
+
+knowledge_base:
+  # Let CodeRabbit accumulate CRS-specific context (rule conventions, past
+  # FP decisions, paranoia-level policy) across PRs.
+  opt_out: false
+
+  # Rule reviews frequently need to check an RFC, a CVE, or a database's SQL
+  # dialect. Leave this on.
+  web_search:
+    enabled: true
+
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "**/CLAUDE.md"
+      - "**/AGENTS.md"
+      - "**/GEMINI.md"
+      - "CONTRIBUTING.md"
+      - "AI-CONTRIBUTIONS.md"
+      - "BACKPORT_POLICY.md"
+      - "docs/**/*.md"
+
+  mcp:
+    usage: auto
+    disabled_servers: []
+
+  learnings:
+    scope: auto
+
+  issues:
+    scope: auto
+
+  pull_requests:
+    scope: auto
+
+  # The project tracks everything in GitHub issues; no Jira.
+  jira:
+    project_keys: []
+
+  # Cross-repo context. The schema caps this at 20; keep the list to repos
+  # joined to the one under review by a real dependency edge — something that
+  # can break across the boundary — rather than every repo in the org.
+  # Each `instructions` string is capped at 2000 chars.
+  linked_repositories:
+    - repository: "coreruleset/coreruleset"
+      instructions: >
+        The rule set itself, and the downstream consumer of nearly every other
+        repo here. Source of truth for rule IDs and their family ranges, the
+        approved tag list (`util/APPROVED_TAGS`), paranoia-level policy,
+        `crs-setup.conf.example` defaults, and the go-ftw regression suite
+        layout under `tests/regression/tests/`. Consult it to check whether a
+        rule ID is already taken, whether a tag is approved, and whether a
+        payload is already covered by a sibling rule.
+    - repository: "coreruleset/go-ftw"
+      instructions: >
+        The regression test runner. Its CLI surface and config
+        (`.ftw.yaml`, overrides files) are invoked by coreruleset CI, by
+        `crs-plugin-test-action`, and by every plugin repo's tests. A change to
+        flags, output format, or exit codes breaks those callers, so treat
+        those as cross-repo breaking changes.
+    - repository: "coreruleset/ftw-tests-schema"
+      instructions: >
+        The authoritative YAML schema for go-ftw test files. Every file under
+        `tests/regression/tests/` in coreruleset and in the plugin repos must
+        conform to it. Use it to decide whether a field in a test file is
+        valid, required, or deprecated, rather than inferring the shape from
+        neighbouring tests.
+    - repository: "coreruleset/crs-toolchain"
+      instructions: >
+        Compiles `regex-assembly/*.ra` sources into the `@rx` patterns in
+        `rules/*.conf` (`regex generate`/`compare`/`update`), and renumbers
+        test IDs (`util renumber-tests`). It defines the `.ra` directive
+        semantics — `##!>` define/include/assemble, `##!=<`/`##!=>` named
+        assemblies, `##!^`/`##!$` prefix and suffix, and the `\s` to
+        `[\s\x0b]` expansion. Consult it before asserting what a `.ra`
+        construct compiles to. coreruleset's pre-commit hooks run it, which is
+        why a hand-edited compiled regex gets reverted.
+    - repository: "coreruleset/crs-linter"
+      instructions: >
+        The linter that gates coreruleset CI (`.github/workflows/lint.yaml`,
+        version pinned in `CRS_LINTER_VERSION`). It defines exactly which
+        metadata problems fail a build — unknown tags, missing or duplicate
+        IDs, unset TX variables, filename and test exclusions. Check its rules
+        before claiming a metadata issue will or will not fail CI, and note
+        that a change to the linter itself can retroactively fail existing
+        rules in coreruleset.
+    - repository: "coreruleset/plugin-registry"
+      instructions: >
+        The registry of official and third-party CRS plugins, including the
+        rule ID range reserved for each plugin. This is the authority for
+        whether a plugin rule sits in its own range or is squatting on a core
+        CRS range or another plugin's. A new plugin, or a plugin claiming a
+        new range, must be reflected here.
+    - repository: "coreruleset/actions"
+      instructions: >
+        Reusable CRS composite GitHub Actions shared across the org's
+        workflows. When reviewing a workflow change, check whether an inline
+        step reimplements something this repo already provides, and whether a
+        change here affects the workflows that call it.
+    - repository: "coreruleset/renovate-config"
+      instructions: >
+        The shared Renovate preset that every repo's `renovate.json` extends
+        via `github>coreruleset/renovate-config`. Consult it to see what the
+        preset already handles before suggesting repo-local `packageRules`,
+        and treat a change here as affecting dependency updates org-wide.
+    # Renamed from coreruleset/coreruleset-documentation; GitHub redirects the
+    # old name, but use the canonical one here.
+    - repository: "coreruleset/documentation"
+      instructions: >
+        The source of truth for everything end users are told about CRS:
+        installation, integration with ModSecurity/Coraza, `crs-setup.conf`
+        configuration and every documented variable, paranoia-level guidance,
+        anomaly scoring, plugin installation and usage, false-positive tuning
+        and exclusion recipes, upgrade and migration notes, and the per-rule
+        documentation published at coreruleset.org/docs.
+
+        Treat it as authoritative over anything inferred from the rules
+        themselves when the question is what an operator is supposed to do.
+        When a review turns on documented behaviour — what a variable
+        defaults to, how an exclusion is meant to be written, whether a
+        setting is deprecated — check here rather than reasoning from the
+        rule set alone.
+
+        It is also the counterpart obligation for user-visible changes. Flag a
+        PR that changes documented behaviour without a matching docs change:
+        a changed or added `crs-setup.conf.example` setting, a removed or
+        renumbered rule ID, a rule moved between paranoia levels, a new or
+        renamed tag, a new plugin or a change to how one is configured, or a
+        changed default in the anomaly-scoring mechanism. The docs change may
+        land as a separate PR in this repo — ask for the link rather than
+        blocking, but do not let the change pass unmentioned.
+
+chat:
+  auto_reply: true
+  art: false
+  # CRS takes community contributions from outside the org; contributors need
+  # to be able to talk to the reviewer on their own PRs.
+  allow_non_org_members: true
+
+# Schema requires this section; empty means we rely on CodeRabbit's defaults.
+code_generation: {}
+
+issue_enrichment:
+  auto_enrich:
+    enabled: true
+  # Planning generates an implementation outline only for issues carrying one
+  # of these labels, so maintainers retain control over which tickets get an
+  # LLM-drafted plan. LLM-drafted plans are advisory only — a rule change
+  # still needs the PL4 coverage probe and the FP analysis done by a human.
+  planning:
+    auto_planning:
+      enabled: true
+      labels:
+        - ":1st_place_medal: good first issue"
+        - ":pray: help wanted"
+        - ":point_down: complexity: low"
+  labeling:
+    auto_apply_labels: true
