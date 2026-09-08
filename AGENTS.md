@@ -75,16 +75,22 @@ PR conventions). Keep the two in sync when either changes.
 
 ## Things that will bite
 
-- **Two label families.** `release:*` is the changelog taxonomy consumed by
-  `.github/release.yml` — it groups the generated release notes by these and excludes
-  `release:ignore` entirely. They loosely mirror conventional-commit types, exactly one per PR
-  (enforced via `mutually_exclusive_groups`), and the fallback is `release:ignore`, never "no
-  label". Topic labels (`:mage: regex-assembly`, `:bomb: sqli`, …) are independent of that
-  family. Do not invent `release:` values; the eight configured here are exactly the ones that
-  exist in the repo, and each maps to one `.github/release.yml` category.
-- **Label names are literal, emoji shortcode included** (`":heavy_plus_sign: False Positive"`).
-  They must already exist in the repo — CodeRabbit never creates them, and a missing label
-  silently no-ops. That is what makes an org-wide list of coreruleset-only labels safe.
+- **Labeling lives in coreruleset/coreruleset's own `.coderabbit.yaml`, not here.** `release:*`
+  is the changelog taxonomy consumed by `.github/release.yml` — it groups the generated release
+  notes by these and excludes `release:ignore` entirely. They loosely mirror conventional-commit
+  types, exactly one per PR (enforced via `mutually_exclusive_groups`), and the fallback is
+  `release:ignore`, never "no label". Topic labels (`:mage: regex-assembly`, `:bomb: sqli`, …)
+  are independent of that family. Do not invent `release:` values; the eight are exactly the
+  ones that exist in coreruleset/coreruleset, and each maps to one `.github/release.yml`
+  category. This config used to define `labeling_instructions` org-wide on the assumption that
+  a missing label silently no-ops; that assumption was false — `go-ftw`, `crs-toolchain`, and
+  `plugin-registry` already carry labels with the exact same literal names (`release:fix`,
+  `release:ignore`, `release:new-feature`, `:book: documentation`) for unrelated purposes, so
+  the org-wide config was actively mislabeling PRs there. The schema has no per-repository
+  scoping field, so labeling was moved to a repo-local `.coderabbit.yaml` in
+  coreruleset/coreruleset (`inheritance: true`, so it still layers on this org config). Label
+  names are literal, emoji shortcode included (`":heavy_plus_sign: False Positive"`), and must
+  already exist in that repo — CodeRabbit never creates them.
 - **`inheritance: true`** is set. List fields (`custom_checks`, `path_filters`,
   `path_instructions`, …) are **replaced, not merged**, when a repo defines the same key
   locally; the repo must set `inheritance: true` in its own `.coderabbit.yaml` to layer rather
