@@ -1460,13 +1460,6 @@ knowledge_base:
         `crs-plugin-test-action`, and by every plugin repo's tests. A change to
         flags, output format, or exit codes breaks those callers, so treat
         those as cross-repo breaking changes.
-    - repository: "coreruleset/ftw-tests-schema"
-      instructions: >
-        The authoritative YAML schema for go-ftw test files. Every file under
-        `tests/regression/tests/` in coreruleset and in the plugin repos must
-        conform to it. Use it to decide whether a field in a test file is
-        valid, required, or deprecated, rather than inferring the shape from
-        neighbouring tests.
     - repository: "coreruleset/crs-toolchain"
       instructions: >
         Compiles `regex-assembly/*.ra` sources into the `@rx` patterns in
@@ -1486,25 +1479,6 @@ knowledge_base:
         before claiming a metadata issue will or will not fail CI, and note
         that a change to the linter itself can retroactively fail existing
         rules in coreruleset.
-    - repository: "coreruleset/plugin-registry"
-      instructions: >
-        The registry of official and third-party CRS plugins, including the
-        rule ID range reserved for each plugin. This is the authority for
-        whether a plugin rule sits in its own range or is squatting on a core
-        CRS range or another plugin's. A new plugin, or a plugin claiming a
-        new range, must be reflected here.
-    - repository: "coreruleset/actions"
-      instructions: >
-        Reusable CRS composite GitHub Actions shared across the org's
-        workflows. When reviewing a workflow change, check whether an inline
-        step reimplements something this repo already provides, and whether a
-        change here affects the workflows that call it.
-    - repository: "coreruleset/renovate-config"
-      instructions: >
-        The shared Renovate preset that every repo's `renovate.json` extends
-        via `github>coreruleset/renovate-config`. Consult it to see what the
-        preset already handles before suggesting repo-local `packageRules`,
-        and treat a change here as affecting dependency updates org-wide.
     # Renamed from coreruleset/coreruleset-documentation; GitHub redirects the
     # old name, but use the canonical one here.
     - repository: "coreruleset/documentation"

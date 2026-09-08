@@ -96,15 +96,20 @@ PR conventions). Keep the two in sync when either changes.
   be reviewed.
 - `allow_non_org_members: true` and `enable_free_tier: true` are deliberate: CRS takes drive-by
   community contributions.
-- **`linked_repositories` is capped at 20** and is selected by dependency edge, not by
-  relevance — a repo earns a slot when something can break across the boundary. The nine here:
-  `coreruleset` (rule IDs, approved tags, PL policy), `go-ftw` + `ftw-tests-schema` (test runner
-  and its YAML schema), `crs-toolchain` (`.ra` directive semantics), `crs-linter` (what actually
-  fails CI), `plugin-registry` (reserved plugin ID ranges), `actions`, `renovate-config`,
-  `documentation`. `documentation` carries the longest entry on purpose: it is the source of
-  truth for everything operators are told (configuration, PL guidance, exclusion recipes,
-  upgrade notes), so it outranks anything inferred from the rules when the question is what a
-  user is supposed to do — and it is the counterpart obligation for any user-visible change.
-  Note it was renamed from `coreruleset-documentation`; GitHub redirects, but the config uses
-  the canonical name. Deliberately excluded: `template-plugin` and `modsecurity-crs-docker` —
-  they consume the rule set but nothing breaks across the edge.
+- **`linked_repositories` is capped at 5 by our CodeRabbit plan** (the schema itself allows up
+  to 20). The five kept, chosen for the checks that fire across the whole org rather than one
+  repo: `coreruleset` (rule IDs, approved tags, PL policy — everything else is downstream of
+  it), `crs-toolchain` (`.ra` directive semantics, backing the regex-assembly source-of-truth
+  check), `crs-linter` (what actually fails CI), `go-ftw` (the test runner every repo's tests
+  depend on), and `documentation` (the counterpart-obligation check: flag a PR that changes
+  documented behavior without a matching docs change). `documentation` carries the longest
+  entry on purpose: it is the source of truth for everything operators are told (configuration,
+  PL guidance, exclusion recipes, upgrade notes), so it outranks anything inferred from the
+  rules when the question is what a user is supposed to do. Note it was renamed from
+  `coreruleset-documentation`; GitHub redirects, but the config uses the canonical name.
+  Dropped to fit the cap: `ftw-tests-schema` (overlaps `go-ftw`), `plugin-registry` (only backs
+  the plugin ID-range check, scoped to plugin repos), `actions` and `renovate-config` (only
+  relevant to workflow/dependency-policy discussions). Revisit if plugin repos start seeing
+  frequent drive-by PRs — `plugin-registry` backs the one blocker-severity check among the four
+  that were cut. Deliberately excluded regardless of the cap: `template-plugin` and
+  `modsecurity-crs-docker` — they consume the rule set but nothing breaks across the edge.
