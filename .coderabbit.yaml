@@ -299,7 +299,7 @@ reviews:
         would. Flag ⚠️ WARNING: <description> — <fix> on the affected line for:
 
         Rule ID range — the ID must fall in the family's range and be unused:
-        900000-900999 initialization, 901000-901999 IP reputation,
+        900000-900999 crs-setup.conf, 901000-901999 initialization,
         905000-905999 common exceptions, 910000-919999 protocol enforcement,
         920000-929999 protocol attacks, 930000-939999 LFI/RFI/RCE/PHP,
         941000-941999 XSS, 942000-942999 SQLi, 943000-943999 session fixation,
@@ -307,10 +307,16 @@ reviews:
         10 in its family. Plugin rules must use the plugin's own reserved
         range, never a core range.
 
-        Missing or wrong metadata — every rule needs `id`, `phase`, `msg`,
+        Missing or wrong metadata — every detection rule (one that scores
+        anomaly points, in 911-944 or 950-956) needs `id`, `phase`, `msg`,
         `logdata`, `tag:'OWASP_CRS'`, a `paranoia-level/N` tag, the relevant
         attack-type and `capec/NNN` tags, `ver:'OWASP_CRS/4.x.x'` matching the
-        current version, and a `severity`. A `tag:` value that is not in
+        current version, and a `severity`. Control rules are exempt: the
+        `pass,nolog` rules in 901 (initialization), 905, 949, 959, 980 and 999,
+        and the `TX:DETECTION_PARANOIA_LEVEL "@lt N"` skipAfter guards at the
+        top of each detection file, carry only `id`, `phase`, `pass,nolog`,
+        `tag:'OWASP_CRS'` and `ver`. Do not ask for msg, logdata, severity,
+        paranoia-level, attack-type or capec metadata on them. A `tag:` value that is not in
         `util/APPROVED_TAGS` fails the crs-linter CI job — say so explicitly
         and tell the author to add it there in sorted position first.
 
@@ -865,8 +871,12 @@ reviews:
           `lts/v*` branch, where it must carry the LTS version rather than
           main's.
 
-          Missing paranoia-level tag, or a tag inconsistent with the
-          `TX:DETECTION_PARANOIA_LEVEL` guard and the file section around it.
+          Missing paranoia-level tag on a detection rule, or a tag
+          inconsistent with the `TX:DETECTION_PARANOIA_LEVEL` guard and the
+          file section around it. `pass,nolog` control rules (901
+          initialization, 905, 949, 959, 980, 999, and the PL skipAfter
+          guards) carry no paranoia-level, severity, logdata or capec
+          metadata by design — never flag them for it.
 
           Missing `capec/` tag on a new detection rule, missing `logdata`, a
           `msg` that does not name the attack class, or a `severity` that does
