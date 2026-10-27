@@ -658,9 +658,10 @@ reviews:
   # (a rule changed without its test, a `.conf` regex changed without its
   # `.ra`) that no per-file instruction can express.
   #
-  # All checks are mode: warning. Escalate an individual check to mode: error
-  # (paired with request_changes_workflow: true) only after confirming a low
-  # false-positive rate on real CRS PRs. Check names are capped at 50 chars
+  # Checks are mode: warning, except "AI Use Without Disclosure" (error). An
+  # error-mode check blocks merge only while auto approvals are enabled
+  # (request_changes_workflow: true). Escalate another check to mode: error
+  # only after confirming a low false-positive rate on real CRS PRs. Check names are capped at 50 chars
   # and instructions at 10,000 chars by the schema.
   pre_merge_checks:
     description:
@@ -941,25 +942,72 @@ reviews:
           a rule ID retired and left unused rather than reassigned; a new
           default introduced alongside the old one with the switch documented.
 
+      # The one check in error mode. It blocks merge only while
+      # reviews.auto_approvals (request_changes_workflow) is enabled. Kept
+      # separate from the adequacy check below so that a missing `## refs` or
+      # a vague field stays a warning.
+      - name: "AI Use Without Disclosure"
+        mode: error
+        instructions: |
+          coreruleset's AI-CONTRIBUTIONS.md policy requires every PR where AI
+          tools materially assisted to disclose it in the PR body. Undisclosed
+          AI-generated content may be closed without merge.
+
+          Return Passed with "not applicable" for a trivial PR (a typo fix, a
+          version bump) or a Renovate/Dependabot update.
+
+          The coreruleset PR template ships an `## AI Disclosure` heading with
+          the line `**AI usage for this contribution:** None / Used` and a
+          `| Detail | Response |` table, so the heading alone proves nothing.
+          The disclosure counts as made only when the PR body (in any heading
+          case, template table or `**tools used**` bullets) says AI was Used
+          and names at least the tool. If it does, return Passed with
+          "disclosure present; adequacy is reviewed by AI Contribution
+          Disclosure".
+
+          It counts as missing when the section was deleted, when the answer
+          is still the unedited `None / Used` or blank, when it says Used but
+          the table is still placeholders, or when it says None while a
+          direct signal below shows AI use. In that case flag ❌ blocker: AI
+          assistance detected without a disclosure — fill in the
+          `## AI Disclosure` section (tools used, what was AI-assisted, review
+          performed) per AI-CONTRIBUTIONS.md. Quote the evidence you relied
+          on. Flag only when at least one direct signal is present, or at
+          least two indirect ones:
+
+          Direct signals: the PR body, a commit message, or a code comment
+          names an AI tool or agent (Devin, Copilot, Claude, ChatGPT, Cursor,
+          Codex, Gemini, ...); a `Co-Authored-By` trailer or "Generated
+          with" line from an AI tool; the author account or a commit author is
+          an AI agent or bot that is not Renovate/Dependabot.
+
+          Indirect signals: generated-looking docstrings or comments at
+          uniform density; a large, mechanically uniform batch of tests; a
+          templated description that restates the diff; a large diff squashed
+          into one commit with no incremental history; claims of verification
+          ("all tests pass", "no false positives") with no command or output
+          to back them.
+
+          With fewer signals than that, return Passed. Do not guess: a blocker
+          on a human contributor's PR costs more than a missed one, which the
+          maintainers can still catch in review.
+
       - name: "AI Contribution Disclosure"
         mode: warning
         instructions: |
           coreruleset's AI-CONTRIBUTIONS.md policy requires every PR where AI
-          tools materially assisted to disclose it in the PR body.
+          tools materially assisted to disclose it in the PR body. A missing
+          section is the job of the "AI Use Without Disclosure" check; this
+          one reviews the section's content and the PR body's format.
 
-          Flag ⚠️ WARNING: <description> — <fix> when the PR body has no
-          `## ai disclosure` section but the diff shows signals of AI
-          assistance: generated-looking docstrings or comments at uniform
-          density, a large mechanically-uniform test batch, boilerplate
-          phrasing in the description, or an unusually large diff with no
-          incremental commit history.
-
-          When the section is present, flag it as inadequate if any field is
-          generic. The template requires three fields, each concrete:
-          `**tools used**` (model name and version), `**assisted with**` (what
-          was actually generated — "initial regex pattern for SQLi
-          detection", "test case scaffolding", "regeneration via
-          crs-toolchain"), and `**review performed**` (concrete verification —
+          When the section says AI was Used, flag it as inadequate if any
+          field is generic. Accept either the PR template's table (Tool(s)
+          used / What was AI-assisted / Review performed) or the bullet form
+          (`**tools used**` / `**assisted with**` / `**review performed**`).
+          Each of the three fields must be concrete: the tool (model name and
+          version), what was actually generated ("initial regex pattern for
+          SQLi detection", "test case scaffolding", "regeneration via
+          crs-toolchain"), and the review performed (concrete verification —
           "ran the full go-ftw suite", "probed the payload at PL4 and mapped
           firing rule IDs", "checked the pattern for RE2 compatibility").
           "assisted with rule writing" or "reviewed the code" is not a
@@ -972,7 +1020,7 @@ reviews:
           does not use attribution trailers.
 
           Do not flag a trivial PR (a typo fix, a version bump, a
-          Renovate/Dependabot automated update) for a missing disclosure.
+          Renovate/Dependabot automated update) for missing sections.
 
       # Generic application-security review for the tooling repos (go-ftw,
       # crs-toolchain, albedo, crs-linter) and for anything CRS ships that

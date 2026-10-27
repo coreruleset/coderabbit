@@ -53,7 +53,8 @@ constraint on the file.
   for cross-file invariants and policy a single line can't express. The CRS-specific ones:
   regex-assembly source-of-truth (`.conf` `@rx` edited without its `.ra`), go-ftw test coverage,
   ReDoS/RE2 compatibility, false-positive risk & existing coverage, rule metadata & ID
-  conventions, rule/config breaking changes, AI contribution disclosure. Plus the generic
+  conventions, rule/config breaking changes, AI use without disclosure (the one `mode: error`
+  check), AI contribution disclosure (adequacy and PR body format). Plus the generic
   supply-chain and appsec checks.
 
 The domain knowledge in these strings is derived from `../coreruleset/CLAUDE.md` (rule ID
@@ -63,11 +64,12 @@ PR conventions). Keep the two in sync when either changes.
 ## Conventions for checks
 
 - Finding format is fixed file-wide: `⚠️ WARNING: <description> — <fix>`, with `❌ blocker`
-  reserved for RE2-incompatible regexes, plugin rules in a core ID range, and hand-edited
-  compiled regex that pre-commit.ci will revert.
-- Every check is `mode: warning`. Escalating to `mode: error` requires also setting
-  `request_changes_workflow: true`, and should follow a validated low false-positive rate on
-  real CRS PRs.
+  reserved for RE2-incompatible regexes, plugin rules in a core ID range, hand-edited
+  compiled regex that pre-commit.ci will revert, and AI assistance without a disclosure.
+- Every check is `mode: warning`, except "AI Use Without Disclosure". An error-mode check
+  blocks merge only while `request_changes_workflow: true` (the deprecated alias of
+  `auto_approvals.enabled`) is set. Escalate another check only after a validated low
+  false-positive rate on real CRS PRs.
 - Ecosystem- and rule-scoped checks open with a **trigger condition** that returns `Passed` +
   "not applicable" when the diff touches nothing relevant — this avoids `Inconclusive` noise.
   Match that pattern in new checks.
