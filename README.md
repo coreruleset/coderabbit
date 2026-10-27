@@ -103,7 +103,7 @@ Nine glob-scoped entries. These carry the domain knowledge a generic reviewer do
 
 ### Pre-merge checks — whole-PR, cross-file
 
-Thirteen checks, all `mode: warning`. These evaluate the diff as a unit and catch invariants no single line can express.
+Fourteen checks, all `mode: warning` except AI Use Without Disclosure (`mode: error`). These evaluate the diff as a unit and catch invariants no single line can express.
 
 **CRS-specific:**
 
@@ -115,7 +115,8 @@ Thirteen checks, all `mode: warning`. These evaluate the diff as a unit and catc
 | False Positive Risk & Existing Coverage | a new pattern with no proof the payload is undetected — the PL4 probe, the sibling baseline, the subset argument, and the libinjection caveat |
 | CRS Rule Metadata & ID Conventions | what crs-linter fails on: ID collisions and range violations, unapproved tags, stale `ver:`, ordering |
 | Rule & Config Breaking Changes | removed or renumbered rule IDs, changed defaults, removed tags, tooling API changes — plus the documentation counterpart |
-| AI Contribution Disclosure | a missing or generic `## ai disclosure`, missing `## what`/`## why`/`## refs`, and attribution trailers this project does not use |
+| AI Use Without Disclosure | **blocker, `mode: error`**: signs of AI assistance (a named AI tool or agent, an AI trailer, or two indirect signals) with no `## ai disclosure` section |
+| AI Contribution Disclosure | a generic `## ai disclosure`, missing `## what`/`## why`/`## refs`, and attribution trailers this project does not use |
 
 **Supply chain and appsec:**
 
@@ -171,8 +172,8 @@ Deliberately excluded: `template-plugin` and `modsecurity-crs-docker` — they c
 
 Follow these when adding to `path_instructions` or `custom_checks`; the file is consistent about them and reviews read worse when it isn't.
 
-- **Finding format is fixed:** `⚠️ WARNING: <description> — <fix>`. `❌ blocker` is reserved for RE2-incompatible regexes, plugin rules in a core ID range, and hand-edited compiled regex that pre-commit.ci will revert.
-- **Every check is `mode: warning`.** Escalating one to `mode: error` also requires `request_changes_workflow: true`, and should follow a validated low false-positive rate on real CRS PRs.
+- **Finding format is fixed:** `⚠️ WARNING: <description> — <fix>`. `❌ blocker` is reserved for RE2-incompatible regexes, plugin rules in a core ID range, hand-edited compiled regex that pre-commit.ci will revert, and AI assistance without a disclosure.
+- **Every check is `mode: warning`**, except AI Use Without Disclosure. An error-mode check blocks merge only while `request_changes_workflow: true` (auto approvals) is set. Escalate another one only after a validated low false-positive rate on real CRS PRs.
 - **Open ecosystem- and rule-scoped checks with a trigger condition** that returns `Passed` plus "not applicable" when the diff touches nothing relevant. Without it the check returns `Inconclusive` on every unrelated PR.
 - **Describe acceptable patterns alongside violations**, so the reviewer has a target state rather than only a complaint.
 - **Where does it go?** Use `path_instructions` when the finding needs to land on a specific line. Use `custom_checks` for cross-file invariants and policy a single line can't express.
