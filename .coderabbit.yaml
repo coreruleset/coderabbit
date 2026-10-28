@@ -550,6 +550,15 @@ reviews:
         different string than intended; percent-encode it and keep the
         readable form in `desc`.
 
+        Response test that never reaches the response — response-phase tests
+        (RESPONSE-95x) POST to the albedo backend's `/reflect`, which parses
+        the request body as a JSON reflection spec and returns only its `body`
+        (or base64 `encodedBody`) field. A plain string gets `400 Invalid JSON
+        in request body`; JSON without `body` returns an empty response. Either
+        way RESPONSE_BODY never holds the payload, so a negative test passes
+        without testing anything. Require `data: '{"body": "<payload>"}'`.
+        albedo ignores the request `Content-Type`, so don't flag that.
+
         Only positive tests — a new or widened pattern should come with at
         least one benign payload asserting it does NOT match, especially for
         short patterns or ones that could hit hashes, IDs, or file paths.
